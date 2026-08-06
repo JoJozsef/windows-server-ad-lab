@@ -1,63 +1,63 @@
-🇬🇧 [English version](README.md)
+🇩🇪 [Deutsche Version](README.de.md)
 
-# Windows Server 2025 Testumgebung — Active Directory, DNS, DHCP, Gruppenrichtlinien & delegierte Administration
+# Windows Server 2025 Lab Environment — Active Directory, DNS, DHCP, Group Policy & Delegated Administration
 
-## Überblick
+## Overview
 
-Dieses Projekt dokumentiert eine selbst aufgesetzte Windows Server 2025 Testumgebung, betrieben als virtuelle Maschine auf einem selbst gehosteten Debian-Heimserver. Ziel war es, praktische Erfahrung mit zentralen Windows-Server-Administrationsaufgaben zu sammeln — Active Directory Domain Services, DNS, DHCP und Gruppenrichtlinien — in einer realistischen, netzwerkintegrierten Umgebung statt in einer isolierten Sandbox.
+This project documents a self-built Windows Server 2025 lab environment, deployed as a virtual machine on a self-hosted Debian home server. The goal was to gain hands-on, practical experience with core Windows Server administration tasks — Active Directory Domain Services, DNS, DHCP, and Group Policy — in a realistic, network-integrated setup rather than an isolated sandbox.
 
-## Umgebung
+## Environment
 
-- **Host:** Debian-Server, AMD Ryzen 5 3500X, 16 GB RAM
-- **Hypervisor:** KVM/QEMU mit libvirt, verwaltet über `virsh` und `virt-install`
-- **Gast-OS (Domain Controller):** Windows Server 2025 Standard (Evaluation), Desktop Experience — 4 GB RAM, 2 vCPUs
-- **Gast-OS (Client):** Windows 10 Pro — 2 GB RAM, 2 vCPUs
-- **Netzwerk:** libvirt macvlan-Netzwerk, wodurch jede VM eine echte IP-Adresse im Heimnetzwerk erhält (statt NAT) — Domain Controller und Client verhalten sich dadurch genau wie in einem physischen Netzwerksegment
-- **Treiber-Hinweis:** Windows 10/11-Clients enthalten standardmäßig keinen integrierten VirtIO-Netzwerktreiber; dies wurde gelöst, indem das offizielle [virtio-win](https://github.com/virtio-win/virtio-win-pkg-scripts) Treiber-ISO als zweites virtuelles CD-Laufwerk eingebunden und der NetKVM-Treiber über den Geräte-Manager installiert wurde.
+- **Host:** Debian server, AMD Ryzen 5 3500X, 16 GB RAM
+- **Hypervisor:** KVM/QEMU with libvirt, managed via `virsh` and `virt-install`
+- **Guest OS (Domain Controller):** Windows Server 2025 Standard (Evaluation), Desktop Experience — 4 GB RAM, 2 vCPUs
+- **Guest OS (Client):** Windows 10 Pro — 2 GB RAM, 2 vCPUs
+- **Networking:** libvirt macvlan network, giving each VM a real IP address on the home LAN (rather than NAT), so the domain controller and client interact exactly as they would on a physical network segment
+- **Driver note:** Windows does not ship with a built-in VirtIO network driver by default on Windows 10/11 clients; this was resolved by attaching the official [virtio-win](https://github.com/virtio-win/virtio-win-pkg-scripts) driver ISO as a second virtual CD-ROM and installing the NetKVM driver via Device Manager.
 
-## Umgesetzte Komponenten
+## What was implemented
 
-- **Active Directory Domain Services (AD DS):** Neuer Forest und neue Domain (`lab.local`) erstellt, Server zum Domain Controller hochgestuft.
-- **DNS:** Gemeinsam mit AD DS installiert, hostet die eigene Forward-Lookup-Zone der Domain; Namensauflösung von einem domänenbeigetretenen Client aus überprüft.
-- **DHCP:** Einen eigenen Scope konfiguriert, sorgfältig dimensioniert und vom bestehenden DHCP-Pool des Routers getrennt, um Adresskonflikte im Heimnetzwerk zu vermeiden. DHCP-Server in Active Directory autorisiert und bestätigt, dass ein Client erfolgreich einen Lease davon erhalten hat.
-- **Domänenbeitritt:** Eine Windows-10-Client-VM der Domäne beigetreten und die Authentifizierung mit einem Domänenkonto bestätigt.
-- **Gruppenrichtlinien (GPO):** Die Kennwortrichtlinie der Default Domain Policy angepasst (Mindestlänge von 7 auf 12 Zeichen erhöht) und die Durchsetzung überprüft, indem versucht wurde, einen neuen AD-Benutzer mit einem nicht konformen Kennwort anzulegen — dies wurde korrekt abgelehnt.
-- **Organisationseinheiten (OUs) & delegierte Administration:** Eine OU-Struktur (`IT`, `Sales`) mit Testbenutzern in jeder OU aufgebaut, anschließend ein nicht-administratives Konto `sales.support` erstellt und über den Delegation of Control Wizard **ausschließlich** für die Sales-OU das Recht zum Zurücksetzen von Kennwörtern delegiert. Das Prinzip der geringsten Rechte praktisch überprüft: Kennwort-Resets funktionierten in der Sales-OU, wurden aber bei einem Benutzer der IT-OU korrekt mit "Access is denied" abgelehnt. Zusätzlich festgestellt, dass "Kennwort zurücksetzen" und "Konto entsperren" separate, delegierbare Rechte sind — das delegierte Konto konnte Kennwörter zurücksetzen, wurde aber beim Versuch, ein gesperrtes Konto zu entsperren, abgelehnt, da dieses Recht nicht separat vergeben worden war.
-- **Dateiserver & NTFS-Berechtigungen:** Sicherheitsgruppen (`Sales-Team`, `IT-Team`) passend zur OU-Struktur erstellt, einen freigegebenen Ordner mit abteilungsspezifischen Unterordnern eingerichtet und sowohl Freigabe- als auch NTFS-Berechtigungen so konfiguriert, dass jede Gruppe nur auf ihren eigenen Unterordner zugreifen kann. Mit beiden Testkonten überprüft, dass der Zugriff je nach Gruppenzugehörigkeit korrekt gewährt oder verweigert wird.
-- **GPO-basierte Laufwerkszuordnung:** Group Policy Preferences (Benutzerkonfiguration → Laufwerkszuordnungen) mit Item-Level Targeting verwendet, um basierend auf der Sicherheitsgruppenzugehörigkeit automatisch ein Netzlaufwerk zur richtigen Abteilungsfreigabe zuzuordnen — Mitglieder von `Sales-Team` erhalten ein `S:`-Laufwerk, Mitglieder von `IT-Team` ein `I:`-Laufwerk, ganz ohne manuelle Konfiguration auf dem Client.
+- **Active Directory Domain Services (AD DS):** Deployed a new forest and domain (`lab.local`), promoted the server to a domain controller.
+- **DNS:** Installed alongside AD DS, hosting the domain's own forward lookup zone; verified name resolution from a domain-joined client.
+- **DHCP:** Configured a dedicated scope, carefully sized and separated from the existing router's DHCP pool to avoid address conflicts on the home network. Authorized the DHCP server in Active Directory and confirmed a client successfully obtained a lease from it.
+- **Domain join:** Joined a Windows 10 client VM to the domain and confirmed authentication with a domain account.
+- **Group Policy (GPO):** Modified the Default Domain Policy's password policy (minimum length raised from 7 to 12 characters) and verified enforcement by attempting to create a new AD user with a non-compliant password, which was correctly rejected.
+- **Organizational Units & delegated administration:** Built an OU structure (`IT`, `Sales`) with test users in each, then created a non-admin `sales.support` account and used the Delegation of Control Wizard to grant it password-reset rights scoped **only** to the Sales OU. Verified the principle of least privilege in practice: password resets succeeded in Sales, but were correctly denied ("Access is denied") when attempted against a user in the IT OU. Also discovered that "Reset Password" and "Unlock Account" are separate delegable rights — the delegated account could reset passwords but was denied when attempting to unlock a locked-out account, since that right hadn't been separately granted.
+- **File Server & NTFS permissions:** Created security groups (`Sales-Team`, `IT-Team`) mapped to the OU structure, set up a shared folder with per-department subfolders, and configured share-level plus NTFS-level permissions so each group can only access its own subfolder. Verified with both test accounts that access is correctly granted or denied depending on group membership.
+- **GPO-based drive mapping:** Used Group Policy Preferences (User Configuration → Drive Maps) with item-level targeting to automatically map a network drive to the correct department share based on security group membership — `Sales-Team` members get an `S:` drive, `IT-Team` members get an `I:` drive, with no manual configuration needed on the client.
 
 ## Screenshots
 
-![Active Directory Users and Computers — beigetretener Client](screenshots/ad-users-and-computers.png)
+![Active Directory Users and Computers — joined client](screenshots/ad-users-and-computers.png)
 
-![DHCP-Scope-Konfiguration](screenshots/dhcp-scope-config.png)
+![DHCP scope configuration](screenshots/dhcp-scope-config.png)
 
-![Gruppenrichtlinien-Kennworteinstellungen](screenshots/gpo-password-policy.png)
+![Group Policy password settings](screenshots/gpo-password-policy.png)
 
-![Durchgesetzte Kennwortrichtlinien-Ablehnung](screenshots/password-rejected.png)
+![Enforced password policy rejection](screenshots/password-rejected.png)
 
-*(Weitere Screenshots zu OU/Delegierung, NTFS-Berechtigungen und GPO-Laufwerkszuordnung folgen.)*
+*(Additional screenshots for OU/delegation, NTFS permissions, and GPO drive mapping to be added.)*
 
-## Praktische Troubleshooting-Beispiele
+## Real-world troubleshooting notes
 
-**Netzwerk-Bridge-Ausfall.** Während der Einrichtung einer Netzwerk-Bridge für die VMs wurde die primäre Netzwerkschnittstelle des Hosts nach einem `systemctl restart networking` kurzzeitig unerreichbar. Anstatt dies als reinen Rückschlag zu werten, ergab sich daraus eine nützliche Übung in Incident Response:
+**Network bridge outage.** Midway through setting up a network bridge for the VMs, the host's primary network interface briefly became unreachable after a `systemctl restart networking`. Rather than treating this as a blocker, it became a useful exercise in incident response:
 
-- Vorab war ein zeitgesteuerter Rollback-Job (`at`) als Sicherheitsnetz eingerichtet worden, bevor die Netzwerkänderung vorgenommen wurde
-- Als der Server unter der erwarteten Adresse nicht mehr erreichbar war, wurde die Client-Liste des Routers genutzt, um ihn unter einer anderen, per DHCP zugewiesenen IP-Adresse zu finden
-- Die Ursache wurde auf eine falsch konfigurierte Systemzeitzone zurückgeführt (6 Stunden Abweichung), die auch für Verwirrung beim Timing des geplanten Rollbacks gesorgt hatte
-- Letztlich wurde statt einer vollständigen Bridge ein sichereres **macvlan**-Netzwerk verwendet, um weitere Änderungen an der primären Schnittstelle des Hosts zu vermeiden
+- A scheduled rollback job (`at`) had been prepared in advance as a safety net before making the network change
+- When the server didn't come back on the expected address, the router's client list and ARP behavior were used to locate it under a different DHCP-assigned IP
+- Root cause was traced to a misconfigured system timezone (6-hour offset), which had also caused confusion around the scheduled rollback timing
+- Ultimately, a safer **macvlan** network was used instead of a full bridge, avoiding any further changes to the host's primary interface
 
-**DHCP-Race-Condition.** Da zwei DHCP-Server gleichzeitig im selben Netzwerksegment aktiv waren — der Heimrouter und der neue Windows-DHCP-Server —, erhielt ein domänenbeigetretener Client gelegentlich einen Lease vom falschen Server, da beide Server auf einen `DHCPDISCOVER` als Erster antworten konnten. Gelöst wurde dies, indem dem domänenbeigetretenen Test-Client eine statische IP-Adresse zugewiesen wurde — eine praktische Erinnerung daran, dass ein Netzwerksegment in der Regel nur einen maßgeblichen DHCP-Server haben sollte, sofern der Datenverkehr nicht explizit getrennt ist (z. B. per DHCP-Relay in ein anderes Subnetz).
+**DHCP race condition.** With two DHCP servers active on the same network segment — the home router and the new Windows DHCP server — a domain-joined client occasionally received a lease from the wrong one, since either server could answer a `DHCPDISCOVER` first. This was resolved by assigning a static IP to the domain-joined test client, and served as a practical reminder that a single network segment should generally only have one authoritative DHCP server unless traffic is explicitly separated (e.g. via DHCP relay to another subnet).
 
-Beide Vorfälle waren gute Beispiele für methodisches Troubleshooting während teilweiser Ausfälle — nicht nur das Abarbeiten einer Checkliste.
+Both incidents were good demonstrations of methodical troubleshooting under partial outages, rather than just following a checklist.
 
-## Demonstrierte Fähigkeiten
+## Skills demonstrated
 
-- Linux-Serveradministration (Debian, systemd, Netzwerk, Firewall/UFW)
-- KVM/QEMU-Virtualisierung und libvirt-Verwaltung
-- Installation und Konfiguration von Windows Server 2025
-- Administration von Active Directory Domain Services, DNS, DHCP
-- Erstellung von Gruppenrichtlinienobjekten, Group Policy Preferences und Item-Level Targeting
-- Organisationseinheiten, Sicherheitsgruppen und delegierte Administration (geringste Rechte)
-- Einrichtung eines Dateiservers mit mehrschichtigen Freigabe- und NTFS-Berechtigungen
-- Netzwerk-Troubleshooting und Incident Recovery
+- Linux server administration (Debian, systemd, networking, firewall/UFW)
+- KVM/QEMU virtualization and libvirt management
+- Windows Server 2025 installation and configuration
+- Active Directory Domain Services, DNS, DHCP administration
+- Group Policy Object creation, Group Policy Preferences, and item-level targeting
+- Organizational Units, security groups, and delegated administration (least privilege)
+- File server setup with share and NTFS permission layering
+- Network troubleshooting and incident recovery
